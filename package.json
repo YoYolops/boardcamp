@@ -1,0 +1,15 @@
+{
+  "name": "boardcamp",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/YoYolops/boardcamp",
+  "author": "Yohan Lopes <yohanhxh@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^10.0.0",
+    "pg": "^8.7.1"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.13"
+  }
+}
