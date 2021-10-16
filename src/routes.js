@@ -286,7 +286,7 @@ routes.post("/rentals", async (req, res) => {
     }
 })
 
-/* routes.post("/rentals/:id/return", async (req, res) => {
+routes.post("/rentals/:id/return", async (req, res) => {
     try {
         const { id } = req.params
 
@@ -296,7 +296,7 @@ routes.post("/rentals", async (req, res) => {
         return res.sendStatus(500)
     }
 })
- */
+
 
 routes.delete("/rentals/:id", async (req, res) => {
     try {
