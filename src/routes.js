@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import pg from 'pg';
 import dotenv from 'dotenv';
+import dayjs from 'dayjs';
 import {
     categorieSchema,
     gameSchema,
-    customerSchema
+    customerSchema,
+    rentalSchema
 } from './joiSchemas.js'
 
 dotenv.config()
@@ -55,13 +57,13 @@ routes.get("/games", async (req, res) => {
         const { name } = req.query
         if(name) {
             const dbResponse = await connection.query(
-                'SELECT * FROM games WHERE name iLIKE $1',
+                'SELECT * FROM games WHERE name iLIKE $1;',
                 [name+"%"]
             )
             return res.json(dbResponse.rows)
         }
 
-        const dbResponse = await connection.query('SELECT * FROM games')
+        const dbResponse = await connection.query('SELECT * FROM games;')
         return res.json(dbResponse.rows)
     } catch(e) {
         console.log("ERRO GET /games")
@@ -115,13 +117,13 @@ routes.get("/customers", async (req, res) => {
         const { cpf } = req.query
         if(cpf) {
             const dbResponse = await connection.query(
-                'SELECT * FROM customers WHERE cpf iLIKE $1',
+                'SELECT * FROM customers WHERE cpf iLIKE $1;',
                 [cpf+"%"]
             )
             return res.send(dbResponse.rows)
         }
 
-        const dbResponse = await connection.query('SELECT * FROM customers')
+        const dbResponse = await connection.query('SELECT * FROM customers;')
         return res.send(dbResponse.rows)
     } catch(e) {
         console.log("ERRO GET /customers");
@@ -133,7 +135,7 @@ routes.get("/customers", async (req, res) => {
 routes.get("/customers/:id", async (req, res) => {
     try {
         const { id } = req.params
-        const dbResponse = await connection.query('SELECT * FROM customers WHERE id = $1', [id])
+        const dbResponse = await connection.query('SELECT * FROM customers WHERE id = $1;', [id])
         if(dbResponse.rows.length === 0) return res.sendStatus(404)
         return res.json(dbResponse.rows[0])
     } catch(e) {
@@ -155,14 +157,14 @@ routes.post("/customers", async (req, res) => {
             birthday
         } = req.body;
 
-        const cpfFound = await connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
+        const cpfFound = await connection.query('SELECT * FROM customers WHERE cpf = $1;', [cpf])
         if(cpfFound.rows.length > 0) return res.sendStatus(409)
 
         await connection.query(
             `INSERT INTO customers
                 (name, phone, cpf, birthday)
              VALUES
-                ($1, $2, $3, $4)`,
+                ($1, $2, $3, $4);`,
             [name, phone, cpf, birthday]
         )
         return res.sendStatus(201)
@@ -183,8 +185,8 @@ routes.put("/customers/:id", async (req, res) => {
         } = req.body
         const { id } = req.params
 
-        const idFound = connection.query('SELECT * FROM customers WHERE id = $1', [id])
-        const cpfFound = connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
+        const idFound = connection.query('SELECT * FROM customers WHERE id = $1;', [id])
+        const cpfFound = connection.query('SELECT * FROM customers WHERE cpf = $1;', [cpf])
 
         const results = await Promise.all([ idFound, cpfFound ])
         if(results[0].rows.length === 0) return res.sendStatus(400)
@@ -199,7 +201,7 @@ routes.put("/customers/:id", async (req, res) => {
                 cpf = $4,
                 birthday = $5
             WHERE 
-                id = $1`,
+                id = $1;`,
             [id, name, phone, cpf, birthday]
         )
 
@@ -211,21 +213,102 @@ routes.put("/customers/:id", async (req, res) => {
     }
 })
 
-routes.get("/rentals", async (req, res) => {
+/* routes.get("/rentals", async (req, res) => {
     try {
-        const { customerId } = req.query
+        const { customerId, gameId } = req.query
+
+        const querys = {
+            customer: 'SELECT * FROM rentals WHERE "customerId" = $1;',
+            game: 'SELECT * FROM rental WHERE "gameId" = $1;',
+            both: `
+                SELECT 
+                    customers.*, games.name, games."categoryId"
+                FROM 
+                    customers
+                JOIN 
+                    games
+            ;`
+        }
+
         if(customerId) {
             const dbResponse = await connection.query(
-                'SELECT * FROM rentals WHERE "customerId" = $1', 
+                'SELECT * FROM rentals WHERE "customerId" = $1;', 
                 [customerId]
             )
             return res.send(dbResponse.rows)
         }
 
-        const dbResponse = await connection.query('SELECT * FROM rentals')
+        const dbResponse = await connection.query('SELECT * FROM rentals;')
         return res.send(dbResponse.rows)
     } catch(e) {
         console.log("ERRO GET /rentals")
+        console.log(e)
+        return res.sendStatus(500)
+    }
+}) */
+
+routes.post("/rentals", async (req, res) => {
+    try {
+        const isValid = !rentalSchema.validate(req.body).error
+        if(!isValid) return res.sendStatus(400)
+
+        const {
+            customerId,
+            gameId,
+            daysRented
+        } = req.body
+
+        const customerFound = connection.query('SELECT * FROM customers WHERE id = $1;', [customerId])
+        const gameFound = connection.query('SELECT * FROM games WHERE id = $1;', [gameId])
+        const rentedGamesFound = connection.query('SELECT * FROM rentals WHERE "gameId" = $1;', [gameId])
+        const results = await Promise.all([ customerFound, gameFound, rentedGamesFound ])        
+        if(results[0].rows.length === 0 ||
+           results[1].rows.length === 0 ||
+           results[2].rows.length >= results[1].rows[0].stockTotal ) return res.sendStatus(400)
+
+
+        const rentDate = dayjs().format('YYYY-MM-DD');
+        const originalPrice = Number(daysRented) * Number(results[1].rows[0].pricePerDay)
+
+        await connection.query(`
+            INSERT INTO rentals 
+                ("customerId", "gameId", "rentDate", "daysRented", "returnDate", "originalPrice", "delayFee")
+            VALUES
+                ($1, $2, $3, $4, NULL, $5, NULL);`,
+            [customerId, gameId, rentDate, daysRented, originalPrice]   
+        )
+
+        return res.sendStatus(201)
+    } catch(e) {
+        console.log("ERRO POST /rentals")
+        console.log(e)
+        return res.sendStatus(500)
+    }
+})
+
+/* routes.post("/rentals/:id/return", async (req, res) => {
+    try {
+        const { id } = req.params
+
+    } catch(e) {
+        console.log("ERRO POST /rentals/:id/return")
+        console.log(e)
+        return res.sendStatus(500)
+    }
+})
+ */
+
+routes.delete("/rentals/:id", async (req, res) => {
+    try {
+        const { id } = req.params
+        const idFound = await connection.query('SELECT * FROM rentals WHERE id = $1;', [id])
+        if(idFound.rows.length === 0 ) return res.sendStatus(404)
+        if(idFound.rows[0].returnDate !== null) return res.sendStatus(400)
+
+        await connection.query('DELETE FROM rentals WHERE id = $1;', [id])
+        return res.sendStatus(200)
+    } catch(e) {
+        console.log("ERRO DELETE /rentals/:id")
         console.log(e)
         return res.sendStatus(500)
     }
