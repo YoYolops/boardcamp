@@ -3,7 +3,8 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import {
     categorieSchema,
-    gameSchema
+    gameSchema,
+    customerSchema
 } from './joiSchemas.js'
 
 dotenv.config()
@@ -124,6 +125,107 @@ routes.get("/customers", async (req, res) => {
         return res.send(dbResponse.rows)
     } catch(e) {
         console.log("ERRO GET /customers");
+        console.log(e)
+        return res.sendStatus(500)
+    }
+})
+
+routes.get("/customers/:id", async (req, res) => {
+    try {
+        const { id } = req.params
+        const dbResponse = await connection.query('SELECT * FROM customers WHERE id = $1', [id])
+        if(dbResponse.rows.length === 0) return res.sendStatus(404)
+        return res.json(dbResponse.rows[0])
+    } catch(e) {
+        console.log("ERRO GET /customers:id")
+        console.log(e)
+        return res.sendStatus(500)
+    }
+})
+
+routes.post("/customers", async (req, res) => {
+    try {
+        const isValid = !customerSchema.validate(req.body).error
+        if(!isValid) return res.sendStatus(400)
+
+        const {
+            name,
+            phone,
+            cpf,
+            birthday
+        } = req.body;
+
+        const cpfFound = await connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
+        if(cpfFound.rows.length > 0) return res.sendStatus(409)
+
+        await connection.query(
+            `INSERT INTO customers
+                (name, phone, cpf, birthday)
+             VALUES
+                ($1, $2, $3, $4)`,
+            [name, phone, cpf, birthday]
+        )
+        return res.sendStatus(201)
+    } catch(e) {
+        console.log("ERRO POST /customers")
+        console.log(e)
+        res.sendStatus(500)
+    }
+})
+
+routes.put("/customers/:id", async (req, res) => {
+    try {
+        const {
+            name,
+            phone,
+            cpf,
+            birthday
+        } = req.body
+        const { id } = req.params
+
+        const idFound = connection.query('SELECT * FROM customers WHERE id = $1', [id])
+        const cpfFound = connection.query('SELECT * FROM customers WHERE cpf = $1', [cpf])
+
+        const results = await Promise.all([ idFound, cpfFound ])
+        if(results[0].rows.length === 0) return res.sendStatus(400)
+        if(results[1].rows.length > 0 && results[1].rows[0].id != id) return res.sendStatus(409)
+
+        await connection.query(
+           `UPDATE 
+                customers
+            SET
+                name = $2,
+                phone = $3,
+                cpf = $4,
+                birthday = $5
+            WHERE 
+                id = $1`,
+            [id, name, phone, cpf, birthday]
+        )
+
+        return res.sendStatus(201)
+    } catch(e) {
+        console.log("ERRO PUT /customers")
+        console.log(e)
+        res.sendStatus(500)
+    }
+})
+
+routes.get("/rentals", async (req, res) => {
+    try {
+        const { customerId } = req.query
+        if(customerId) {
+            const dbResponse = await connection.query(
+                'SELECT * FROM rentals WHERE "customerId" = $1', 
+                [customerId]
+            )
+            return res.send(dbResponse.rows)
+        }
+
+        const dbResponse = await connection.query('SELECT * FROM rentals')
+        return res.send(dbResponse.rows)
+    } catch(e) {
+        console.log("ERRO GET /rentals")
         console.log(e)
         return res.sendStatus(500)
     }
