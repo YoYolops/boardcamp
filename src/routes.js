@@ -213,39 +213,66 @@ routes.put("/customers/:id", async (req, res) => {
     }
 })
 
-/* routes.get("/rentals", async (req, res) => {
+routes.get("/rentals", async (req, res) => {
     try {
         const { customerId, gameId } = req.query
 
-        const querys = {
-            customer: 'SELECT * FROM rentals WHERE "customerId" = $1;',
-            game: 'SELECT * FROM rental WHERE "gameId" = $1;',
-            both: `
+        const query = `
                 SELECT 
-                    customers.*, games.name, games."categoryId"
+                    rentals.*,
+                    customers.id AS customer_id,
+                    customers.name AS customer_name,
+                    games.id AS game_id,
+                    games.name AS game_name,
+                    categories.id AS category_id,
+                    categories.name AS category_name
                 FROM 
-                    customers
+                    rentals
                 JOIN 
-                    games
+                    customers ON rentals."customerId" = customers.id
+                JOIN
+                    games ON rentals."gameId" = games.id
+                JOIN
+                    categories ON games."categoryId" = categories.id
             ;`
-        }
+
+        const dbResponse = await connection.query(query)
+        let rentalsArray = dbResponse.rows
 
         if(customerId) {
-            const dbResponse = await connection.query(
-                'SELECT * FROM rentals WHERE "customerId" = $1;', 
-                [customerId]
-            )
-            return res.send(dbResponse.rows)
+            rentalsArray = rentalsArray.filter(obj => obj.customerId === Number(customerId))
+        }
+        if(gameId) {
+            rentalsArray = rentalsArray.filter(obj => obj.gameId === Number(gameId))
         }
 
-        const dbResponse = await connection.query('SELECT * FROM rentals;')
-        return res.send(dbResponse.rows)
+        const finalResponse = rentalsArray.map(obj => ({
+            id: obj.id,
+            customerId: obj.customerId,
+            gameId: obj.gameId,
+            rentDate: obj.rentDate,
+            daysRented: obj.daysRented,
+            returnDate: obj.returnDate,
+            originalPrice: obj.originalPrice,
+            delayFee: obj.delayFee,
+            customer: {
+                id: obj.customer_id,
+                name: obj.customer_name
+            },
+            game: {
+                id: obj.game_id,
+                name: obj.game_name,
+                categoryId: obj.category_id,
+                categoryName: obj.category_name
+            }
+        }))
+        return res.send(finalResponse)
     } catch(e) {
         console.log("ERRO GET /rentals")
         console.log(e)
         return res.sendStatus(500)
     }
-}) */
+})
 
 routes.post("/rentals", async (req, res) => {
     try {
