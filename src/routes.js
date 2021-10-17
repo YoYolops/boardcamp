@@ -289,7 +289,29 @@ routes.post("/rentals", async (req, res) => {
 routes.post("/rentals/:id/return", async (req, res) => {
     try {
         const { id } = req.params
+        const dbResponse = await connection.query('SELECT * FROM rentals WHERE id = $1', [id])
 
+        if(dbResponse.rows.length === 0) return res.sendStatus(404)
+        if(dbResponse.rows[1].returnDate !== null) return sendStatus(400)
+
+        const rentalObject = dbResponse.rows[1]
+
+        const returnDate = dayjs()
+        const rentDateObject = dayjs(rentalObject.rentDate, 'YYYY-MM-DD')
+        const delayFee = (Math.floor((returnDate - rentDateObject)/(60*60*24*1000))) * (rentalObject.originalPrice/rentDateObject.daysRented)
+
+        await connection.query(
+            `UPDATE 
+                rentals
+             SET
+                "delayFee" = $1
+                "returnDate" = $2
+             WHERE
+                id = $3`,
+            [delayFee, returnDate.format('YYYY-MM-DD'), id]
+        )
+
+        return res.sendStatus(200)
     } catch(e) {
         console.log("ERRO POST /rentals/:id/return")
         console.log(e)
