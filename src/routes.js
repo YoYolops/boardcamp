@@ -325,13 +325,13 @@ routes.post("/rentals/:id/return", async (req, res) => {
 
         const returnDate = dayjs()
         const rentDateObject = dayjs(rentalObject.rentDate, 'YYYY-MM-DD')
-        const delayFee = (Math.floor((returnDate - rentDateObject)/(60*60*24*1000))) * (rentalObject.originalPrice/rentDateObject.daysRented)
+        const delayFee = (Math.floor((returnDate - rentDateObject)/(60*60*24*1000))) * (rentalObject.originalPrice/rentalObject.daysRented)
 
         await connection.query(
             `UPDATE 
                 rentals
              SET
-                "delayFee" = $1
+                "delayFee" = $1,
                 "returnDate" = $2
              WHERE
                 id = $3`,
